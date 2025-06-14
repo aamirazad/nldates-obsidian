@@ -1,5 +1,5 @@
 import { App, MarkdownView, Modal, Setting } from "obsidian";
-import { generateMarkdownLink } from "src/utils";
+import { generateMarkdownLink } from "../utils";
 import type NaturalLanguageDates from "../main";
 
 export default class DatePickerModal extends Modal {
@@ -27,8 +27,8 @@ export default class DatePickerModal extends Modal {
       }
 
       const parsedDate = this.plugin.parseDate(cleanDateInput || "today");
-      let parsedDateString = parsedDate.moment.isValid()
-        ? parsedDate.moment.format(momentFormat)
+      let parsedDateString = parsedDate.dayjs.isValid()
+        ? parsedDate.dayjs.format(momentFormat)
         : "";
 
       if (insertAsLink) {
@@ -60,11 +60,11 @@ export default class DatePickerModal extends Modal {
 
       new Setting(formEl)
         .setName("Date Format")
-        .setDesc("Moment format to be used")
-        .addMomentFormat((momentEl) => {
-          momentEl.setPlaceholder("YYYY-MM-DD HH:mm");
-          momentEl.setValue(momentFormat);
-          momentEl.onChange((value) => {
+        .setDesc("Day.js format to be used (e.g., YYYY-MM-DD HH:mm)")
+        .addText((textEl) => {
+          textEl.setPlaceholder("YYYY-MM-DD HH:mm");
+          textEl.setValue(momentFormat);
+          textEl.onChange((value) => {
             momentFormat = value.trim() || "YYYY-MM-DD HH:mm";
             this.plugin.settings.modalMomentFormat = momentFormat;
             this.plugin.saveSettings();
@@ -73,13 +73,15 @@ export default class DatePickerModal extends Modal {
           });
         });
       new Setting(formEl).setName("Add as link?").addToggle((toggleEl) => {
-        toggleEl.setValue(this.plugin.settings.modalToggleLink).onChange((value) => {
-          insertAsLink = value;
-          this.plugin.settings.modalToggleLink = insertAsLink;
-          this.plugin.saveSettings();
+        toggleEl
+          .setValue(this.plugin.settings.modalToggleLink)
+          .onChange((value) => {
+            insertAsLink = value;
+            this.plugin.settings.modalToggleLink = insertAsLink;
+            this.plugin.saveSettings();
 
-          previewEl.setText(getDateStr());
-        });
+            previewEl.setText(getDateStr());
+          });
       });
 
       formEl.createDiv("modal-button-container", (buttonContainerEl) => {

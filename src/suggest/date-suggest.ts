@@ -5,10 +5,9 @@ import {
   EditorSuggest,
   EditorSuggestContext,
   EditorSuggestTriggerInfo,
-  TFile,
 } from "obsidian";
-import type NaturalLanguageDates from "src/main";
-import { generateMarkdownLink } from "src/utils";
+import type NaturalLanguageDates from "../main";
+import { generateMarkdownLink } from "../utils";
 
 interface IDateCompletion {
   label: string;
@@ -23,15 +22,27 @@ export default class DateSuggest extends EditorSuggest<IDateCompletion> {
     this.app = app;
     this.plugin = plugin;
 
-    // @ts-ignore
-    this.scope.register(["Shift"], "Enter", (evt: KeyboardEvent) => {
-      // @ts-ignore
-      this.suggestions.useSelectedItem(evt);
-      return false;
+    // Register Shift+Enter to select suggestion with alias
+    this.scope.register(["Shift"], "Enter", (_evt: KeyboardEvent) => {
+      // Get the currently selected suggestion
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const selectedIndex = (this as any).suggestions?.selectedItem;
+      if (selectedIndex !== undefined && selectedIndex >= 0) {
+        const suggestions = this.getSuggestions(this.context);
+        if (suggestions[selectedIndex]) {
+          // Call selectSuggestion with shift key event
+          const mockEvent = new KeyboardEvent("keydown", { shiftKey: true });
+          this.selectSuggestion(suggestions[selectedIndex], mockEvent);
+          return false; // Prevent default behavior
+        }
+      }
+      return true; // Allow default behavior if no suggestion selected
     });
 
     if (this.plugin.settings.autosuggestToggleLink) {
-      this.setInstructions([{ command: "Shift", purpose: "Keep text as alias" }]);
+      this.setInstructions([
+        { command: "Shift", purpose: "Keep text as alias" },
+      ]);
     }
   }
 
@@ -46,36 +57,37 @@ export default class DateSuggest extends EditorSuggest<IDateCompletion> {
   }
 
   getDateSuggestions(context: EditorSuggestContext): IDateCompletion[] {
+    // Time suggestions
     if (context.query.match(/^time/)) {
       return ["now", "+15 minutes", "+1 hour", "-15 minutes", "-1 hour"]
         .map((val) => ({ label: `time:${val}` }))
         .filter((item) => item.label.toLowerCase().startsWith(context.query));
     }
+
+    // Relative suggestions like "next/last/this"
     if (context.query.match(/(next|last|this)/i)) {
       const reference = context.query.match(/(next|last|this)/i)[1];
       return [
         "week",
         "month",
         "year",
-        "Sunday",
         "Monday",
         "Tuesday",
         "Wednesday",
         "Thursday",
         "Friday",
         "Saturday",
+        "Sunday",
       ]
         .map((val) => ({ label: `${reference} ${val}` }))
         .filter((items) => items.label.toLowerCase().startsWith(context.query));
     }
 
-    const relativeDate =
-      context.query.match(/^in ([+-]?\d+)/i) || context.query.match(/^([+-]?\d+)/i);
+    // Numeric relative dates like "in 5" or "+3"
+    const relativeDate = context.query.match(/^(?:in\s+)?([+-]?\d+)/i);
     if (relativeDate) {
       const timeDelta = relativeDate[1];
       return [
-        { label: `in ${timeDelta} minutes` },
-        { label: `in ${timeDelta} hours` },
         { label: `in ${timeDelta} days` },
         { label: `in ${timeDelta} weeks` },
         { label: `in ${timeDelta} months` },
@@ -85,16 +97,29 @@ export default class DateSuggest extends EditorSuggest<IDateCompletion> {
       ].filter((items) => items.label.toLowerCase().startsWith(context.query));
     }
 
-    return [{ label: "Today" }, { label: "Yesterday" }, { label: "Tomorrow" }].filter(
-      (items) => items.label.toLowerCase().startsWith(context.query)
-    );
+    // Basic suggestions
+    return [
+      { label: "today" },
+      { label: "tomorrow" },
+      { label: "yesterday" },
+      { label: "monday" },
+      { label: "tuesday" },
+      { label: "wednesday" },
+      { label: "thursday" },
+      { label: "friday" },
+      { label: "saturday" },
+      { label: "sunday" },
+    ].filter((items) => items.label.toLowerCase().startsWith(context.query));
   }
 
   renderSuggestion(suggestion: IDateCompletion, el: HTMLElement): void {
     el.setText(suggestion.label);
   }
 
-  selectSuggestion(suggestion: IDateCompletion, event: KeyboardEvent | MouseEvent): void {
+  selectSuggestion(
+    suggestion: IDateCompletion,
+    event: KeyboardEvent | MouseEvent
+  ): void {
     const { editor } = this.context;
 
     const includeAlias = event.shiftKey;
@@ -120,11 +145,7 @@ export default class DateSuggest extends EditorSuggest<IDateCompletion> {
     editor.replaceRange(dateStr, this.context.start, this.context.end);
   }
 
-  onTrigger(
-    cursor: EditorPosition,
-    editor: Editor,
-    file: TFile
-  ): EditorSuggestTriggerInfo {
+  onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestTriggerInfo {
     if (!this.plugin.settings.isAutosuggestEnabled) {
       return null;
     }

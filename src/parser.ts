@@ -1,133 +1,52 @@
-import chrono, { Chrono, Parser } from "chrono-node";
-import type { Moment } from "moment";
+import * as chrono from "chrono-node";
+import dayjs, { Dayjs } from "dayjs";
+import weekday from "dayjs/plugin/weekday";
+import localeData from "dayjs/plugin/localeData";
 
 import { DayOfWeek } from "./settings";
-import {
-  ORDINAL_NUMBER_PATTERN,
-  getLastDayOfMonth,
-  getLocaleWeekStart,
-  getWeekNumber,
-  parseOrdinalNumberPattern,
-} from "./utils";
+import { getLocaleWeekStart } from "./utils";
+
+// Initialize dayjs plugins
+dayjs.extend(weekday);
+dayjs.extend(localeData);
 
 export interface NLDResult {
   formattedString: string;
   date: Date;
-  moment: Moment;
-}
-
-function getLocalizedChrono(): Chrono {
-  const locale = window.moment.locale();
-
-  switch (locale) {
-    case "en-gb":
-      return new Chrono(chrono.en.createCasualConfiguration(true));
-    default:
-      return new Chrono(chrono.en.createCasualConfiguration(false));
-  }
-}
-
-function getConfiguredChrono(): Chrono {
-  const localizedChrono = getLocalizedChrono();
-  localizedChrono.parsers.push({
-    pattern: () => {
-      return /\bChristmas\b/i;
-    },
-    extract: () => {
-      return {
-        day: 25,
-        month: 12,
-      };
-    },
-  });
-
-  localizedChrono.parsers.push({
-    pattern: () => new RegExp(ORDINAL_NUMBER_PATTERN),
-    extract: (_context, match) => {
-      return {
-        day: parseOrdinalNumberPattern(match[0]),
-        month: window.moment().month(),
-      };
-    },
-  } as Parser);
-  return localizedChrono;
+  dayjs: Dayjs;
 }
 
 export default class NLDParser {
-  chrono: Chrono;
-
   constructor() {
-    this.chrono = getConfiguredChrono();
+    // Modern chrono doesn't need explicit configuration
   }
 
   getParsedDate(selectedText: string, weekStartPreference: DayOfWeek): Date {
-    const parser = this.chrono;
-    const initialParse = parser.parse(selectedText);
-    const weekdayIsCertain = initialParse[0]?.start.isCertain("weekday");
-
     const weekStart =
       weekStartPreference === "locale-default"
         ? getLocaleWeekStart()
         : weekStartPreference;
 
-    const locale = {
-      weekStart: getWeekNumber(weekStart),
-    };
+    // Handle special "this week" and "next week" cases
+    const thisWeekMatch = selectedText.match(/^this\s+week$/i);
+    const nextWeekMatch = selectedText.match(/^next\s+week$/i);
 
-    const thisDateMatch = selectedText.match(/this\s([\w]+)/i);
-    const nextDateMatch = selectedText.match(/next\s([\w]+)/i);
-    const lastDayOfMatch = selectedText.match(/(last day of|end of)\s*([^\n\r]*)/i);
-    const midOf = selectedText.match(/mid\s([\w]+)/i);
-
-    const referenceDate = weekdayIsCertain
-      ? window.moment().weekday(0).toDate()
-      : new Date();
-
-    if (thisDateMatch && thisDateMatch[1] === "week") {
-      return parser.parseDate(`this ${weekStart}`, referenceDate);
+    if (thisWeekMatch) {
+      return chrono.parseDate(`this ${weekStart}`, new Date()) || new Date();
     }
 
-    if (nextDateMatch && nextDateMatch[1] === "week") {
-      return parser.parseDate(`next ${weekStart}`, referenceDate, {
-        forwardDate: true,
-      });
+    if (nextWeekMatch) {
+      return chrono.parseDate(`next ${weekStart}`, new Date()) || new Date();
     }
 
-    if (nextDateMatch && nextDateMatch[1] === "month") {
-      const thisMonth = parser.parseDate("this month", new Date(), {
-        forwardDate: true,
-      });
-      return parser.parseDate(selectedText, thisMonth, {
-        forwardDate: true,
-      });
-    }
-
-    if (nextDateMatch && nextDateMatch[1] === "year") {
-      const thisYear = parser.parseDate("this year", new Date(), {
-        forwardDate: true,
-      });
-      return parser.parseDate(selectedText, thisYear, {
-        forwardDate: true,
-      });
-    }
-
-    if (lastDayOfMatch) {
-      const tempDate = parser.parse(lastDayOfMatch[2]);
-      const year = tempDate[0].start.get("year");
-      const month = tempDate[0].start.get("month");
-      const lastDay = getLastDayOfMonth(year, month);
-
-      return parser.parseDate(`${year}-${month}-${lastDay}`, new Date(), {
-        forwardDate: true,
-      });
-    }
-
+    // Handle special "mid" case (e.g., "mid January" -> "January 15th")
+    const midOf = selectedText.match(/^mid\s+([\w]+)$/i);
     if (midOf) {
-      return parser.parseDate(`${midOf[1]} 15th`, new Date(), {
-        forwardDate: true,
-      });
+      return chrono.parseDate(`${midOf[1]} 15th`, new Date()) || new Date();
     }
 
-    return parser.parseDate(selectedText, referenceDate, { locale });
+    // For everything else, let chrono handle it with current date as reference
+    // This fixes the Monday issue - chrono will correctly interpret "monday" as next Monday
+    return chrono.parseDate(selectedText, new Date()) || new Date();
   }
 }

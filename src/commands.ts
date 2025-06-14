@@ -2,7 +2,10 @@ import { MarkdownView } from "obsidian";
 import { adjustCursor, getSelectedText } from "./utils";
 import NaturalLanguageDates from "./main";
 
-export function getParseCommand(plugin: NaturalLanguageDates, mode: string): void {
+export function getParseCommand(
+  plugin: NaturalLanguageDates,
+  mode: string
+): void {
   const { workspace } = plugin.app;
   const activeView = workspace.getActiveViewOfType(MarkdownView);
 
@@ -17,7 +20,7 @@ export function getParseCommand(plugin: NaturalLanguageDates, mode: string): voi
 
   const date = plugin.parseDate(selectedText);
 
-  if (!date.moment.isValid()) {
+  if (!date.dayjs.isValid()) {
     // Do nothing
     editor.setCursor({
       line: cursor.line,

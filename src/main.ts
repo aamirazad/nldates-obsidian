@@ -1,4 +1,5 @@
 import { MarkdownView, ObsidianProtocolData, Plugin } from "obsidian";
+import dayjs from "dayjs";
 
 import DatePickerModal from "./modals/date-picker";
 import NLDParser, { NLDResult } from "./parser";
@@ -81,7 +82,10 @@ export default class NaturalLanguageDates extends Plugin {
     });
 
     this.addSettingTab(new NLDSettingsTab(this.app, this));
-    this.registerObsidianProtocolHandler("nldates", this.actionHandler.bind(this));
+    this.registerObsidianProtocolHandler(
+      "nldates",
+      this.actionHandler.bind(this)
+    );
     this.registerEditorSuggest(new DateSuggest(this.app, this));
 
     this.app.workspace.onLayoutReady(() => {
@@ -106,18 +110,16 @@ export default class NaturalLanguageDates extends Plugin {
     @param dateString: A string that contains a date in natural language, e.g. today, tomorrow, next week
     @param format: A string that contains the formatting string for a Moment
     @returns NLDResult: An object containing the date, a cloned Moment and the formatted string.
-  */
-  parse(dateString: string, format: string): NLDResult {
+  */ parse(dateString: string, format: string): NLDResult {
     const date = this.parser.getParsedDate(dateString, this.settings.weekStart);
     const formattedString = getFormattedDate(date, format);
     if (formattedString === "Invalid date") {
       console.debug("Input date " + dateString + " can't be parsed by nldates");
     }
-
     return {
       formattedString,
       date,
-      moment: window.moment(date),
+      dayjs: dayjs(date),
     };
   }
 
@@ -135,12 +137,11 @@ export default class NaturalLanguageDates extends Plugin {
 
   async actionHandler(params: ObsidianProtocolData): Promise<void> {
     const { workspace } = this.app;
-
     const date = this.parseDate(params.day);
     const newPane = parseTruthy(params.newPane || "yes");
 
-    if (date.moment.isValid()) {
-      const dailyNote = await getOrCreateDailyNote(date.moment);
+    if (date.dayjs.isValid()) {
+      const dailyNote = await getOrCreateDailyNote(date.dayjs);
       workspace.getLeaf(newPane).openFile(dailyNote);
     }
   }
